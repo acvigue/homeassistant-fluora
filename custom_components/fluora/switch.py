@@ -1,14 +1,10 @@
-"""Light platform for Fluora integration."""
+"""Switch platform for Fluora integration."""
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from homeassistant.components.light import (
-    ATTR_BRIGHTNESS,
-    ColorMode,
-    LightEntity,
-)
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,7 +21,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Fluora light from a config entry."""
+    """Set up Fluora switch from a config entry."""
     client = hass.data[DOMAIN]["client"]
     ip_address = hass.data[DOMAIN][config_entry.entry_id]["ip_address"]
     
@@ -35,30 +31,27 @@ async def async_setup_entry(
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
     
-    # Create light entity
-    entities = [FluoraLight(coordinator, config_entry)]
+    # Create switch entities
+    entities = [FluoraMainSwitch(coordinator, config_entry)]
     
     async_add_entities(entities)
 
 
-class FluoraLight(CoordinatorEntity, LightEntity):
-    """Representation of a Fluora light."""
+class FluoraMainSwitch(CoordinatorEntity, SwitchEntity):
+    """Representation of a Fluora main power switch."""
 
     def __init__(
         self,
         coordinator: FluoraDeviceCoordinator,
         config_entry: ConfigEntry,
     ) -> None:
-        """Initialize the light."""
+        """Initialize the switch."""
         super().__init__(coordinator)
         
         self.config_entry = config_entry
-        self._attr_unique_id = f"{coordinator.ip_address}_light"
-        self._attr_name = f"{coordinator.device_name} Light"
-        
-        # Set supported color modes
-        self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-        self._attr_color_mode = ColorMode.BRIGHTNESS
+        self._attr_unique_id = f"{coordinator.ip_address}_main_switch"
+        self._attr_name = f"{coordinator.device_name} Power"
+        self._attr_icon = "mdi:power"
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -82,7 +75,7 @@ class FluoraLight(CoordinatorEntity, LightEntity):
 
     @property
     def is_on(self) -> bool:
-        """Return true if light is on."""
+        """Return true if switch is on."""
         # Check the device's internal state first
         if self.coordinator.device and self.coordinator.device.state:
             return self.coordinator.device.state.is_on
@@ -96,37 +89,14 @@ class FluoraLight(CoordinatorEntity, LightEntity):
         
         return False
 
-    @property
-    def brightness(self) -> int | None:
-        """Return the brightness of this light between 0..255."""
-        if self.coordinator.device and self.coordinator.device.state and self.is_on:
-            # Convert from 0-100 to 0-255
-            brightness_percent = self.coordinator.device.state.brightness
-            return int(brightness_percent * 255 / 100)
-        return None
-
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Instruct the light to turn on."""
-        brightness = kwargs.get(ATTR_BRIGHTNESS)
-        
-        # Send turn on command
-        if brightness is not None:
-            # Convert brightness from 0-255 to 0-100
-            brightness_percent = int(brightness * 100 / 255)
-            await self.coordinator.async_send_command(
-                "set_brightness", brightness=brightness_percent
-            )
-        
+        """Turn the switch on."""
         await self.coordinator.async_send_command("turn_on")
-        
-        # Request coordinator update
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Instruct the light to turn off."""
+        """Turn the switch off."""
         await self.coordinator.async_send_command("turn_off")
-        
-        # Request coordinator update
         await self.coordinator.async_request_refresh()
 
     @property

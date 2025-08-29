@@ -2,15 +2,17 @@
     "config_flow": {
         "title": "Fluora",
         "error": {
-            "cannot_connect": "Failed to connect",
+            "cannot_connect": "Failed to connect to device",
+            "no_devices_found": "No Fluora devices found. Please enter IP address manually.",
+            "device_not_found": "Selected device not found",
             "unknown": "Unexpected error"
         },
         "step": {
             "user": {
                 "title": "Setup Fluora",
-                "description": "Enter the IP address of your Fluora device, or wait for auto-discovery.",
+                "description": "Enter the IP address of your Fluora device, or leave blank for auto-discovery.",
                 "data": {
-                    "ip_address": "IP Address"
+                    "ip_address": "IP Address (optional)"
                 }
             },
             "discovery_confirm": {
@@ -19,6 +21,18 @@
                 "data": {
                     "ip_address": "Device"
                 }
+            }
+        }
+    },
+    "entity": {
+        "light": {
+            "fluora_light": {
+                "name": "Light"
+            }
+        },
+        "switch": {
+            "fluora_main_switch": {
+                "name": "Power"
             }
         }
     }
