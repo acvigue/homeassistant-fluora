@@ -1,0 +1,28 @@
+"""Translation dictionaries for the Koios Digital Clock integration."""
+
+TRANSLATIONS = {
+    "en": {
+        "config_flow": {
+            "title": "Koios Digital Clock",
+            "error": {
+                "cannot_connect": "Failed to connect",
+                "invalid_auth": "Invalid authentication",
+                "unknown": "Unexpected error"
+            },
+            "step": {
+                "user": {
+                    "title": "Setup Koios Digital Clock",
+                    "description": "Enter the connection details for your Koios Digital Clock.",
+                    "data": {
+                        "host": "Host",
+                        "port": "Port"
+                    }
+                },
+                "discovery_confirm": {
+                    "title": "Confirm discovery",
+                    "description": "Do you want to add the Koios Digital Clock '{name}' to Home Assistant?"
+                }
+            }
+        }
+    }
+}

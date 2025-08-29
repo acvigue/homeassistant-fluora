@@ -1,0 +1,120 @@
+set_led_effect:
+  name: Set LED Effect
+  description: Set LED effect with optional brightness and color
+  fields:
+    entity_id:
+      name: Entity ID
+      description: Clock entity to control
+      required: true
+      selector:
+        entity:
+          domain: light
+          integration: koiosdigital
+    effect:
+      name: Effect
+      description: LED effect to apply
+      required: true
+      selector:
+        select:
+          options:
+            - "solid"
+            - "blink"
+            - "breathe"
+            - "cyclic"
+            - "rainbow"
+            - "color_wipe"
+            - "theater_chase"
+            - "sparkle"
+    brightness:
+      name: Brightness
+      description: LED brightness (0-255)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 255
+          step: 1
+    color:
+      name: RGB Color
+      description: RGB color as [r, g, b] array
+      required: false
+      example: "[255, 0, 0]"
+
+set_fibonacci_theme:
+  name: Set Fibonacci Theme
+  description: Set Fibonacci clock theme with optional brightness
+  fields:
+    entity_id:
+      name: Entity ID
+      description: Fibonacci clock entity to control
+      required: true
+      selector:
+        entity:
+          domain: light
+          integration: koiosdigital
+    theme:
+      name: Theme
+      description: Theme name to apply
+      required: true
+      selector:
+        select:
+          options:
+            - "RGB"
+            - "Mondrian"
+            - "Basbrun"
+            - "80's"
+            - "Pastel"
+            - "Modern"
+            - "Cold"
+            - "Warm"
+            - "Earth"
+            - "Dark"
+    brightness:
+      name: Brightness
+      description: Display brightness (0-255)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 255
+          step: 1
+
+set_nixie_config:
+  name: Set Nixie Configuration
+  description: Configure Nixie clock settings
+  fields:
+    entity_id:
+      name: Entity ID
+      description: Nixie clock entity to control
+      required: true
+      selector:
+        entity:
+          domain: light
+          integration: koiosdigital
+    brightness:
+      name: Brightness
+      description: Nixie tube brightness (0-100%)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+    military_time:
+      name: Military Time
+      description: Use 24-hour format
+      required: false
+      selector:
+        boolean:
+    blinking_dots:
+      name: Blinking Dots
+      description: Enable blinking separator dots
+      required: false
+      selector:
+        boolean:
+    enabled:
+      name: Enabled
+      description: Enable or disable Nixie display
+      required: false
+      selector:
+        boolean:
