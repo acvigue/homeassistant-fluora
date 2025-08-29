@@ -1,41 +1,30 @@
-"""Koios Digital Clock integration for Home Assistant."""
+"""Fluora integration for Home Assistant."""
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import CONF_IP_ADDRESS, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import DOMAIN
-from .coordinator import KoiosClockDataUpdateCoordinator
-from .services import async_setup_services, async_unload_services
+from .coordinator import FluoraDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SELECT, Platform.SWITCH, Platform.NUMBER]
+PLATFORMS: list[Platform] = [Platform.LIGHT]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Koios Digital Clock from a config entry."""
-    session = async_get_clientsession(hass)
-    coordinator = KoiosClockDataUpdateCoordinator(
+    """Set up Fluora from a config entry."""
+    coordinator = FluoraDataUpdateCoordinator(
         hass,
-        session,
-        entry.data["host"],
-        entry.data["port"],
-        entry.data["model"],
+        entry.data[CONF_IP_ADDRESS],
     )
 
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-
-    # Set up services on first entry
-    if len(hass.data[DOMAIN]) == 1:
-        await async_setup_services(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -45,10 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
-        
-        # Unload services if this is the last entry
-        if not hass.data[DOMAIN]:
-            await async_unload_services(hass)
+        coordinator = hass.data[DOMAIN].pop(entry.entry_id)
+        await coordinator.async_shutdown()
 
     return unload_ok

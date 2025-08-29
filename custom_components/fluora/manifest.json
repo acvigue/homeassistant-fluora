@@ -1,21 +1,16 @@
 {
-    "domain": "koiosdigital",
-    "name": "Koios Digital",
+    "domain": "fluora",
+    "name": "Fluora",
     "codeowners": [
-        "@koiosdigital"
+        "@acvigue"
     ],
     "config_flow": true,
-    "dependencies": [
-        "zeroconf"
-    ],
-    "documentation": "https://github.com/koiosdigital",
+    "dependencies": [],
+    "documentation": "https://github.com/acvigue/homeassistant-fluora",
     "integration_type": "hub",
     "iot_class": "local_polling",
     "requirements": [
-        "aiohttp>=3.8.0"
+        "libfluora>=0.1.1"
     ],
-    "version": "1.0.0",
-    "zeroconf": [
-        "_koiosdigital._tcp.local."
-    ]
+    "version": "1.0.0"
 }
