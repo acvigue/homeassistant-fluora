@@ -21,53 +21,47 @@ class FluoraDataUpdateCoordinator(DataUpdateCoordinator[dict]):
     def __init__(
         self,
         hass: HomeAssistant,
+        client: PixelAirClient,
         ip_address: str,
     ) -> None:
         """Initialize."""
         self.ip_address = ip_address
-        self.client: PixelAirClient | None = None
+        self.client = client
         self.device: PixelAirDevice | None = None
-        self._client_started = False
 
         super().__init__(
             hass,
             _LOGGER,
-            name=DOMAIN,
+            name=f"{DOMAIN}_{ip_address}",
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
 
-    async def _async_setup_client(self) -> None:
-        """Set up the Fluora client."""
-        if self.client is not None:
+    async def _async_setup_device(self) -> None:
+        """Set up the device registration."""
+        if self.device is not None:
             return
 
-        # Create client and device in executor to avoid blocking
-        def _create_client_and_device():
-            client = PixelAirClient()
-            client.register_device(self.ip_address)
-            device = client.get_device(self.ip_address)
-            return client, device
-
-        self.client, self.device = await self.hass.async_add_executor_job(
-            _create_client_and_device
-        )
-
-        if self.device is None:
-            raise UpdateFailed(f"Failed to register device {self.ip_address}")
-
-        # Start client if not already started
-        if not self._client_started:
-            def _start_client():
-                return self.client.start()
-
-            success = await self.hass.async_add_executor_job(_start_client)
+        def _register_device():
+            # Register device with the shared client
+            success = self.client.register_device(self.ip_address)
             if not success:
-                raise UpdateFailed("Failed to start Fluora client")
-            self._client_started = True
+                # Device might already be registered, try to get it
+                device = self.client.get_device(self.ip_address)
+                if device is None:
+                    raise RuntimeError(f"Failed to register or find device {self.ip_address}")
+                return device
+            else:
+                device = self.client.get_device(self.ip_address)
+                if device is None:
+                    raise RuntimeError(f"Device {self.ip_address} not found after registration")
+                return device
+
+        self.device = await self.hass.async_add_executor_job(_register_device)
+        _LOGGER.info("Registered device %s with shared client", self.ip_address)
 
     async def _async_update_data(self) -> dict:
         """Update data via library."""
-        await self._async_setup_client()
+        await self._async_setup_device()
 
         if self.device is None:
             raise UpdateFailed("Device not available")
@@ -107,9 +101,10 @@ class FluoraDataUpdateCoordinator(DataUpdateCoordinator[dict]):
         return await self.hass.async_add_executor_job(_set_brightness)
 
     async def async_shutdown(self) -> None:
-        """Shutdown the client."""
-        if self.client is not None and self._client_started:
-            def _stop_client():
-                self.client.stop()
+        """Shutdown the device (unregister from shared client)."""
+        if self.device is not None:
+            def _unregister_device():
+                self.client.unregister_device(self.ip_address)
 
-            await self.hass.async_add_executor_job(_stop_client)
+            await self.hass.async_add_executor_job(_unregister_device)
+            _LOGGER.info("Unregistered device %s from shared client", self.ip_address)

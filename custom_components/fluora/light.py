@@ -27,7 +27,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Fluora light platform."""
-    coordinator: FluoraDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: FluoraDataUpdateCoordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
 
     async_add_entities(
         [FluoraLight(coordinator, entry)],

@@ -31,36 +31,67 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """
     ip_address = data[CONF_IP_ADDRESS]
 
+    # Check if we have a shared client already
+    domain_data = hass.data.get(DOMAIN, {})
+    client = domain_data.get("client")
+
     def _test_connection():
         """Test connection to device."""
-        client = PixelAirClient()
-        try:
-            # Register device and start client briefly to test connection
-            success = client.register_device(ip_address)
-            if not success:
-                raise CannotConnect("Failed to register device")
+        if client is None:
+            # Create temporary client for validation
+            temp_client = PixelAirClient()
+            try:
+                if not temp_client.start():
+                    raise CannotConnect("Failed to start client")
 
-            if not client.start():
-                raise CannotConnect("Failed to start client")
+                # Wait briefly for any response
+                import time
+                time.sleep(2)
 
-            # Wait briefly for any response
-            import time
-            time.sleep(2)
+                # Check discovered devices
+                discovered = temp_client.get_discovered_devices()
+                if ip_address in discovered:
+                    device_info = discovered[ip_address]
+                    return {
+                        "title": device_info.nickname or device_info.device_model or "Fluora Device",
+                        "ip_address": ip_address,
+                        "device_info": device_info.to_dict(),
+                    }
+                else:
+                    # Try to register and test the device
+                    success = temp_client.register_device(ip_address)
+                    if not success:
+                        raise CannotConnect("Failed to register device")
 
-            device = client.get_device(ip_address)
-            if device is None:
-                raise CannotConnect("Device not found")
+                    device = temp_client.get_device(ip_address)
+                    if device is None:
+                        raise CannotConnect("Device not found")
 
-            # Get device info if available
-            device_info = device.get_device_info()
-            
-            return {
-                "title": device_info.get("model", "Fluora Device"),
-                "ip_address": ip_address,
-                "device_info": device_info,
-            }
-        finally:
-            client.stop()
+                    device_info = device.get_device_info()
+                    return {
+                        "title": device_info.get("model", "Fluora Device"),
+                        "ip_address": ip_address,
+                        "device_info": device_info,
+                    }
+            finally:
+                temp_client.stop()
+        else:
+            # Use existing shared client
+            discovered = client.get_discovered_devices()
+            if ip_address in discovered:
+                device_info = discovered[ip_address]
+                return {
+                    "title": device_info.nickname or device_info.device_model or "Fluora Device",
+                    "ip_address": ip_address,
+                    "device_info": device_info.to_dict(),
+                }
+            else:
+                # Device not in discovery, assume it's valid for now
+                return {
+                    "title": "Fluora Device",
+                    "ip_address": ip_address,
+                    "device_info": {},
+                }
 
     try:
         return await hass.async_add_executor_job(_test_connection)
@@ -147,19 +178,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _async_get_discovered_devices(self) -> dict[str, DeviceInfo]:
         """Get discovered devices from client."""
+        # Check if we have a shared client already
+        domain_data = self.hass.data.get(DOMAIN, {})
+        client = domain_data.get("client")
+
         def _discover():
-            client = PixelAirClient()
-            try:
-                if not client.start():
-                    return {}
-                
-                # Wait for discovery
-                import time
-                time.sleep(5)
-                
+            if client is not None:
+                # Use existing shared client
                 return client.get_discovered_devices()
-            finally:
-                client.stop()
+            else:
+                # Create temporary client for discovery
+                temp_client = PixelAirClient()
+                try:
+                    if not temp_client.start():
+                        return {}
+                    
+                    # Wait for discovery
+                    import time
+                    time.sleep(5)
+                    
+                    return temp_client.get_discovered_devices()
+                finally:
+                    temp_client.stop()
 
         try:
             discovered = await self.hass.async_add_executor_job(_discover)
