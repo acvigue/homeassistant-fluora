@@ -21,17 +21,13 @@ PLATFORMS: list[Platform] = [
 ]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Fluora from a config entry."""
-    _LOGGER.debug("Setting up Fluora entry: %s", entry.entry_id)
-    
-    # Get or create the shared FluoraClient
+async def async_get_shared_client(hass: HomeAssistant) -> PixelAirClient:
+    """Get or create the shared PixelAirClient."""
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
     
-    # Check if we already have a client running
     if "client" not in hass.data[DOMAIN]:
-        _LOGGER.debug("Creating new PixelAirClient")
+        _LOGGER.debug("Creating new shared PixelAirClient")
         client = PixelAirClient()
         
         # Start the client
@@ -49,8 +45,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await hass.async_add_executor_job(client.stop)
         
         hass.bus.async_listen_once("homeassistant_stop", cleanup_client)
-    else:
-        _LOGGER.debug("Using existing PixelAirClient")
+    
+    return hass.data[DOMAIN]["client"]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Fluora from a config entry."""
+    _LOGGER.debug("Setting up Fluora entry: %s", entry.entry_id)
+    
+    # Get the shared client (creates it if needed)
+    client = await async_get_shared_client(hass)
     
     # Track this entry
     hass.data[DOMAIN]["entries"].add(entry.entry_id)

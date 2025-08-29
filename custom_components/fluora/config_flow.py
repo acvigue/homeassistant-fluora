@@ -16,6 +16,7 @@ from homeassistant.exceptions import HomeAssistantError
 from libfluora import PixelAirClient, DeviceInfo
 
 from .const import DOMAIN
+from . import async_get_shared_client
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,35 +37,23 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """
     ip_address = data[CONF_IP_ADDRESS]
     
-    # Create a temporary client to test connectivity
-    client = PixelAirClient()
+    # Get the shared client
+    client = await async_get_shared_client(hass)
     
-    try:
-        # Start the client
-        if not await hass.async_add_executor_job(client.start):
-            raise CannotConnect("Failed to start client")
-        
-        # Wait a bit for discovery
-        await asyncio.sleep(2)
-        
-        # Check if we can find the device
-        discovered_devices = await hass.async_add_executor_job(client.get_discovered_devices)
-        
-        if ip_address not in discovered_devices:
-            raise CannotConnect(f"Device at {ip_address} not found")
-        
-        device_info = discovered_devices[ip_address]
-        
-        # Return info that you want to store in the config entry.
-        return {
-            "title": device_info.nickname or f"Fluora Device ({ip_address})",
-            "ip_address": ip_address,
-            "device_info": device_info.to_dict(),
-        }
+    # Check if we can find the device
+    discovered_devices = await hass.async_add_executor_job(client.get_discovered_devices)
     
-    finally:
-        # Clean up the temporary client
-        await hass.async_add_executor_job(client.stop)
+    if ip_address not in discovered_devices:
+        raise CannotConnect(f"Device at {ip_address} not found")
+    
+    device_info = discovered_devices[ip_address]
+    
+    # Return info that you want to store in the config entry.
+    return {
+        "title": device_info.nickname or f"Fluora Device ({ip_address})",
+        "ip_address": ip_address,
+        "device_info": device_info.to_dict(),
+    }
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -156,7 +145,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         for ip, device_info in self.discovered_devices.items():
             name = device_info.nickname or f"Device at {ip}"
             if device_info.device_model:
-                name += f" ({device_info.device_model})"
+                # Ensure device_model is a string (in case it's bytes)
+                model = device_info.device_model
+                if isinstance(model, bytes):
+                    model = model.decode('utf-8', errors='replace')
+                name += f" ({model})"
             device_options[ip] = name
 
         if not device_options:
@@ -180,35 +173,27 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Discover Fluora devices on the network."""
         _LOGGER.debug("Starting device discovery")
         
-        # Create a temporary client for discovery
-        client = PixelAirClient()
+        # Get the shared client
+        client = await async_get_shared_client(self.hass)
         
         try:
-            # Start the client
-            if await self.hass.async_add_executor_job(client.start):
-                # Wait for discovery
-                await asyncio.sleep(DISCOVERY_TIMEOUT)
-                
-                # Get discovered devices
-                discovered = await self.hass.async_add_executor_job(client.get_discovered_devices)
-                
-                # Filter out already configured devices
-                for ip_address, device_info in discovered.items():
-                    # Check if this device is already configured
-                    await self.async_set_unique_id(ip_address)
-                    if not self._async_current_entries():
-                        self.discovered_devices[ip_address] = device_info
-                
-                _LOGGER.debug("Found %d unconfigured devices", len(self.discovered_devices))
-            else:
-                _LOGGER.error("Failed to start discovery client")
+            # Wait for discovery (client is already running)
+            await asyncio.sleep(DISCOVERY_TIMEOUT)
+            
+            # Get discovered devices
+            discovered = await self.hass.async_add_executor_job(client.get_discovered_devices)
+            
+            # Filter out already configured devices
+            for ip_address, device_info in discovered.items():
+                # Check if this device is already configured
+                await self.async_set_unique_id(ip_address)
+                if not self._async_current_entries():
+                    self.discovered_devices[ip_address] = device_info
+            
+            _LOGGER.debug("Found %d unconfigured devices", len(self.discovered_devices))
         
         except Exception as e:
             _LOGGER.error("Error during discovery: %s", e)
-        
-        finally:
-            # Clean up the temporary client
-            await self.hass.async_add_executor_job(client.stop)
 
 
 class CannotConnect(HomeAssistantError):
