@@ -17,7 +17,6 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.LIGHT,
-    Platform.SWITCH,
 ]
 
 
@@ -52,9 +51,6 @@ async def async_get_shared_client(hass: HomeAssistant) -> PixelAirClient:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Fluora from a config entry."""
     _LOGGER.debug("Setting up Fluora entry: %s", entry.entry_id)
-    
-    # Get the shared client (creates it if needed)
-    client = await async_get_shared_client(hass)
     
     # Track this entry
     hass.data[DOMAIN]["entries"].add(entry.entry_id)
@@ -96,7 +92,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Migrate old entry."""
-    _LOGGER.debug("Migrating from version %s", config_entry.version)
     
     # No migrations needed yet since this is version 1
     if config_entry.version == 1:

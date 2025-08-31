@@ -8,12 +8,11 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_IP_ADDRESS
+from homeassistant.const import CONF_IP_ADDRESS, CONF_MODEL, CONF_MAC
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
 
-from libfluora import PixelAirClient, DeviceInfo
+from libfluora import DeviceInfo
 
 from .const import DOMAIN
 from . import async_get_shared_client
@@ -44,17 +43,19 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     discovered_devices = await hass.async_add_executor_job(client.get_discovered_devices)
     
     if ip_address not in discovered_devices:
-        raise CannotConnect(f"Device at {ip_address} not found")
+        raise Exception(f"Device at {ip_address} not found")
     
     device_info = discovered_devices[ip_address]
     
     # Return info that you want to store in the config entry.
     return {
         "title": device_info.nickname or f"Fluora Device ({ip_address})",
-        "ip_address": ip_address,
-        "device_info": device_info.to_dict(),
+        "data": {
+            CONF_IP_ADDRESS: ip_address,
+            CONF_MODEL: device_info.device_model,
+            CONF_MAC: device_info.mac_address,
+        },
     }
-
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Fluora."""
@@ -63,6 +64,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self):
         """Initialize the config flow."""
+        
         self.discovered_devices: dict[str, DeviceInfo] = {}
 
     async def async_step_user(
@@ -72,14 +74,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is None:
-            # Start discovery process
-            await self._async_discover_devices()
-            
-            # If we found devices, show discovery confirmation
-            if self.discovered_devices:
-                return await self.async_step_discovery_confirm()
-            
-            # Otherwise, show manual entry form
             return self.async_show_form(
                 step_id="user",
                 data_schema=STEP_USER_DATA_SCHEMA,
@@ -90,8 +84,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Manual IP entry
             try:
                 info = await validate_input(self.hass, user_input)
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -101,21 +93,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 
                 return self.async_create_entry(
                     title=info["title"],
-                    data={CONF_IP_ADDRESS: user_input[CONF_IP_ADDRESS]},
+                    data={CONF_IP_ADDRESS: user_input[CONF_IP_ADDRESS],
+                          CONF_MODEL: info["data"][CONF_MODEL],
+                          CONF_MAC: info["data"][CONF_MAC]},
                 )
-        else:
-            # No manual entry, try discovery again
-            await self._async_discover_devices()
-            if self.discovered_devices:
-                return await self.async_step_discovery_confirm()
-            else:
-                errors["base"] = "no_devices_found"
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=STEP_USER_DATA_SCHEMA,
-            errors=errors,
-        )
 
     async def async_step_discovery_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -135,7 +116,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 
                 return self.async_create_entry(
                     title=title,
-                    data={CONF_IP_ADDRESS: ip_address},
+                    data={CONF_IP_ADDRESS: ip_address,
+                          CONF_MODEL: device_info.device_model,
+                          CONF_MAC: device_info.mac_address},
                 )
             else:
                 errors["base"] = "device_not_found"
@@ -144,12 +127,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_options = {}
         for ip, device_info in self.discovered_devices.items():
             name = device_info.nickname or f"Device at {ip}"
-            if device_info.device_model:
-                # Ensure device_model is a string (in case it's bytes)
-                model = device_info.device_model
-                if isinstance(model, bytes):
-                    model = model.decode('utf-8', errors='replace')
-                name += f" ({model})"
             device_options[ip] = name
 
         if not device_options:
@@ -177,9 +154,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         client = await async_get_shared_client(self.hass)
         
         try:
-            # Wait for discovery (client is already running)
-            await asyncio.sleep(DISCOVERY_TIMEOUT)
-            
             # Get discovered devices
             discovered = await self.hass.async_add_executor_job(client.get_discovered_devices)
             
@@ -194,7 +168,3 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         except Exception as e:
             _LOGGER.error("Error during discovery: %s", e)
-
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
