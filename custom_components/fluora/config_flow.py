@@ -39,13 +39,34 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # Get the shared client
     client = await async_get_shared_client(hass)
     
-    # Check if we can find the device
+    # Wait a moment for discovery to work, then check for the device
+    await asyncio.sleep(1)
     discovered_devices = await hass.async_add_executor_job(client.get_discovered_devices)
     
     if ip_address not in discovered_devices:
-        raise Exception(f"Device at {ip_address} not found")
-    
-    device_info = discovered_devices[ip_address]
+        # Try to register the device directly if not discovered
+        try:
+            await hass.async_add_executor_job(client.register_device, ip_address)
+            # Wait a moment and check if the device is now available
+            await asyncio.sleep(1)
+            all_devices = await hass.async_add_executor_job(client.get_all_devices)
+            
+            if ip_address in all_devices:
+                device = all_devices[ip_address]
+                device_info_dict = await hass.async_add_executor_job(device.get_device_info)
+                
+                # Create a basic DeviceInfo-like structure
+                device_info = type('DeviceInfo', (), {
+                    'nickname': device_info_dict.get('nickname'),
+                    'device_model': device_info_dict.get('device_model', 'Unknown'),
+                    'mac_address': device_info_dict.get('mac_address', ip_address)
+                })()
+            else:
+                raise Exception(f"Device at {ip_address} not reachable")
+        except Exception:
+            raise Exception(f"Device at {ip_address} not found or not reachable")
+    else:
+        device_info = discovered_devices[ip_address]
     
     # Return info that you want to store in the config entry.
     return {
@@ -97,6 +118,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                           CONF_MODEL: info["data"][CONF_MODEL],
                           CONF_MAC: info["data"][CONF_MAC]},
                 )
+        else:
+            # Auto-discovery requested (empty or no IP address provided)
+            await self._async_discover_devices()
+            return await self.async_step_discovery_confirm()
 
     async def async_step_discovery_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -154,14 +179,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         client = await async_get_shared_client(self.hass)
         
         try:
+            # Give the client a moment to discover devices if it just started
+            await asyncio.sleep(2)
+            
             # Get discovered devices
             discovered = await self.hass.async_add_executor_job(client.get_discovered_devices)
             
             # Filter out already configured devices
             for ip_address, device_info in discovered.items():
                 # Check if this device is already configured
-                await self.async_set_unique_id(ip_address)
-                if not self._async_current_entries():
+                if not any(
+                    entry.unique_id == ip_address 
+                    for entry in self._async_current_entries()
+                ):
                     self.discovered_devices[ip_address] = device_info
             
             _LOGGER.debug("Found %d unconfigured devices", len(self.discovered_devices))
