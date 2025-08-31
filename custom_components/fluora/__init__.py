@@ -52,6 +52,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Fluora from a config entry."""
     _LOGGER.debug("Setting up Fluora entry: %s", entry.entry_id)
     
+    # Ensure the shared client is initialized
+    await async_get_shared_client(hass)
+    
     # Track this entry
     hass.data[DOMAIN]["entries"].add(entry.entry_id)
     

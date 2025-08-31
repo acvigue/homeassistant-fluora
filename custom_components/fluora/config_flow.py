@@ -8,13 +8,12 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_IP_ADDRESS, CONF_MODEL, CONF_MAC
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
 from libfluora import DeviceInfo
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_IP_ADDRESS, CONF_MODEL, CONF_MAC
 from . import async_get_shared_client
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,15 +44,22 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     
     if ip_address not in discovered_devices:
         # Try to register the device directly if not discovered
+        _LOGGER.debug("Device %s not in discovered devices, attempting direct registration", ip_address)
         try:
             await hass.async_add_executor_job(client.register_device, ip_address)
             # Wait a moment and check if the device is now available
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)  # Increased wait time
             all_devices = await hass.async_add_executor_job(client.get_all_devices)
             
             if ip_address in all_devices:
                 device = all_devices[ip_address]
+                _LOGGER.debug("Device %s registered successfully", ip_address)
                 device_info_dict = await hass.async_add_executor_job(device.get_device_info)
+                
+                # Check if device_info_dict is valid
+                if device_info_dict is None:
+                    _LOGGER.warning("Device %s returned None for device info", ip_address)
+                    device_info_dict = {}
                 
                 # Create a basic DeviceInfo-like structure
                 device_info = type('DeviceInfo', (), {
@@ -62,10 +68,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                     'mac_address': device_info_dict.get('mac_address', ip_address)
                 })()
             else:
+                _LOGGER.error("Device %s not found after registration attempt", ip_address)
                 raise Exception(f"Device at {ip_address} not reachable")
-        except Exception:
+        except Exception as e:
+            _LOGGER.error("Failed to register device %s: %s", ip_address, e)
             raise Exception(f"Device at {ip_address} not found or not reachable")
     else:
+        _LOGGER.debug("Device %s found in discovered devices", ip_address)
         device_info = discovered_devices[ip_address]
     
     # Return info that you want to store in the config entry.
@@ -108,6 +117,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=STEP_USER_DATA_SCHEMA,
+                    errors=errors,
+                )
             else:
                 await self.async_set_unique_id(user_input[CONF_IP_ADDRESS])
                 self._abort_if_unique_id_configured()

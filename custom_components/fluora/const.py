@@ -10,6 +10,8 @@ DEFAULT_SCAN_INTERVAL = 10
 # Configuration keys
 CONF_IP_ADDRESS = "ip_address"
 CONF_DEVICES = "devices"
+CONF_MODEL = "model"
+CONF_MAC = "mac_address"
 
 # Device attributes
 ATTR_MODEL = "model"
