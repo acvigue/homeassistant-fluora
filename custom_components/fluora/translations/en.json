@@ -1,26 +1,26 @@
 {
     "config_flow": {
-        "title": "Fluora",
         "error": {
             "cannot_connect": "Failed to connect to device",
             "unknown": "Unexpected error"
         },
         "step": {
-            "user": {
-                "title": "Setup Fluora",
-                "description": "To add a Fluora device, please enter its IP address.",
-                "data": {
-                    "host": "Hostname or IP Address"
-                }
-            },
             "confirm_discovery": {
-                "title": "Confirm Fluora Device",
-                "description": "A Fluora device has been discovered at {host}. Would you like to add it?",
                 "data": {
                     "host": "Hostname or IP Address"
-                }
+                },
+                "description": "A Fluora device has been discovered at {host}. Would you like to add it?",
+                "title": "Confirm Fluora Device"
+            },
+            "user": {
+                "data": {
+                    "host": "Hostname or IP Address"
+                },
+                "description": "To add a Fluora device, please enter its IP address.",
+                "title": "Setup Fluora"
             }
-        }
+        },
+        "title": "Fluora"
     },
     "entity": {
         "light": {
