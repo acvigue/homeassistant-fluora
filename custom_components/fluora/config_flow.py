@@ -39,21 +39,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self._process_discovered_device(discovery_info.ip)
 
     async def _process_discovered_device(self, ip_address: str) -> ConfigFlowResult:
-        client = await async_get_shared_client(self.hass)
-        device = client.get_device(ip_address)
-        if device is None:
-            print("Registering new device")
-            device = PixelAirDevice(ip_address)
-            client.register_device(device)
+        device = PixelAirDevice(ip_address)
 
-        result = await device.get_state(timeout=3)  # Initial state fetch
-        print(f"Discovery result: {result}, state: {device.state}")
+        result = await device.get_state(timeout=5)  # Initial state fetch
         if result is False:
             return self.async_abort(reason="cannot_connect")
+        device.close()
 
-        client.unregister_device(device)  # Clean up if not needed
         await self.async_set_unique_id(device.state.mac_address)
-        self._abort_if_unique_id_configured(updates={CONF_HOST: ip_address})
+        self._abort_if_unique_id_configured(updates={CONF_HOST: ip_address, CONF_NAME: device.state.nickname})
         return await self.async_step_confirm_discovery(
             {
                 CONF_HOST: ip_address,
@@ -70,6 +64,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 title=data[CONF_NAME],
                 data={
                     CONF_HOST: data[CONF_HOST],
+                    CONF_NAME: data[CONF_NAME],
                 },
             )
 
@@ -77,7 +72,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="confirm_discovery",
             description_placeholders={
-                CONF_HOST: self._discovered_ip,
+                CONF_HOST: data[CONF_HOST],
+                CONF_NAME: data[CONF_NAME],
             },
         )
 

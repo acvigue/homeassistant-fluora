@@ -15,7 +15,7 @@
             },
             "confirm_discovery": {
                 "title": "Confirm Fluora Device",
-                "description": "A Fluora device has been discovered at {host}. Would you like to add it?",
+                "description": "A Fluora device ({name}) has been discovered at {host}. Would you like to add it?",
                 "data": {
                     "host": "Hostname or IP Address"
                 }
